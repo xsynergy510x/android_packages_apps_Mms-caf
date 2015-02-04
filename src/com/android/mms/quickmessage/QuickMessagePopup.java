@@ -182,6 +182,8 @@ public class QuickMessagePopup extends Activity {
         // Load the views and Parse the intent to show the QuickMessage
         setupViews();
         parseIntent(getIntent().getExtras(), false);
+
+        setFinishOnTouchOutside(false);
     }
 
     private void setupViews() {
@@ -438,12 +440,14 @@ public class QuickMessagePopup extends Activity {
      * Update the page indicator counter to show the currently selected visible page number
      */
     public void updateMessageCounter() {
-        String separator = mContext.getString(R.string.message_counter_separator);
-        mQmMessageCounter.setText((mCurrentPage + 1) + " " + separator + " " + mMessageList.size());
+        int current = mCurrentPage + 1;
+        int total = mMessageList.size();
+        mQmMessageCounter.setText(getString(R.string.message_counter, current, total));
 
-        if (DEBUG)
-            Log.d(LOG_TAG, "updateMessageCounter() called, counter text set to " + (mCurrentPage + 1)
-                    + " of " + mMessageList.size());
+        if (DEBUG) {
+            Log.d(LOG_TAG, "updateMessageCounter() called, counter text set to "
+                    + current + " of " + total);
+        }
     }
 
     /**
@@ -836,6 +840,10 @@ public class QuickMessagePopup extends Activity {
                     Log.d(LOG_TAG, "instantiateItem(): Creating page #" + (position + 1) + " for message from "
                             + qm.getFromName() + ". Number of pages to create = " + getCount());
 
+                if (mCurrentQm == null) {
+                    mCurrentQm = qm;
+                }
+
                 // Set the general fields
                 qmFromName.setText(qm.getFromName());
                 qmTimestamp.setText(MessageUtils.formatTimeStampString(mContext, qm.getTimestamp(),
@@ -1004,7 +1012,12 @@ public class QuickMessagePopup extends Activity {
         }
 
         @Override
-        public void finishUpdate(View arg0) {}
+        public void finishUpdate(View arg0) {
+            if (mCurrentQm != null && mCurrentQm.getEditText() != null) {
+                // After a page switch, re-focus on the reply editor
+                mCurrentQm.getEditText().requestFocus();
+            }
+        }
 
         @Override
         public void restoreState(Parcelable arg0, ClassLoader arg1) {}
@@ -1015,7 +1028,12 @@ public class QuickMessagePopup extends Activity {
         }
 
         @Override
-        public void startUpdate(View arg0) {}
+        public void startUpdate(View arg0) {
+            if (mCurrentQm != null) {
+                // When the view is refreshed, preserve the current reply
+                mCurrentQm.saveReplyText();
+            }
+        }
 
         @Override
         public void onPageScrollStateChanged(int arg0) {}
