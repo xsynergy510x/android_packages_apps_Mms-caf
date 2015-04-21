@@ -52,6 +52,7 @@ import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.ProgressDialog;
+import android.app.Service;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
 import android.content.ClipData;
@@ -137,6 +138,7 @@ import android.widget.Toolbar;
 
 import com.android.contacts.common.util.MaterialColorMapUtils;
 import com.android.contacts.common.util.MaterialColorMapUtils.MaterialPalette;
+import com.android.contacts.common.util.PickupGestureDetector;
 import com.android.internal.telephony.PhoneConstants;
 import com.android.internal.telephony.RILConstants;
 import com.android.internal.telephony.TelephonyIntents;
@@ -193,7 +195,8 @@ import com.google.android.mms.pdu.SendReq;
  */
 public class ComposeMessageActivity extends Activity
         implements View.OnClickListener, TextView.OnEditorActionListener,
-        MessageStatusListener, Contact.UpdateListener, IZoomListener {
+        MessageStatusListener, Contact.UpdateListener, IZoomListener,
+        PickupGestureDetector.PickupListener {
     public static final int REQUEST_CODE_ATTACH_IMAGE                   = 100;
     public static final int REQUEST_CODE_TAKE_PICTURE                   = 101;
     public static final int REQUEST_CODE_ATTACH_VIDEO                   = 102;
@@ -327,6 +330,8 @@ public class ComposeMessageActivity extends Activity
     }
 
     private ContentResolver mContentResolver;
+
+    private PickupGestureDetector mPickupDetector;
 
     private BackgroundQueryHandler mBackgroundQueryHandler;
 
@@ -536,11 +541,15 @@ public class ComposeMessageActivity extends Activity
 
     private void pickContacts(int mode, int requestCode) {
         Intent intent = new Intent(ComposeMessageActivity.this, SelectRecipientsList.class);
-        if (mRecipientsEditor == null) {
-            initRecipientsEditor();
+        // avoid initializing mRecipientsEditor wrong. Otherwise, this will
+        // cause failure when saving a draft.
+        if(requestCode == REQUEST_CODE_ADD_RECIPIENTS) {
+            if (mRecipientsEditor == null) {
+                initRecipientsEditor();
+            }
+            ContactList contacts = mRecipientsEditor.constructContactsFromInput(false);
+            intent.putExtra(SelectRecipientsList.EXTRA_RECIPIENTS, contacts.getNumbers());
         }
-        ContactList contacts = mRecipientsEditor.constructContactsFromInput(false);
-        intent.putExtra(SelectRecipientsList.EXTRA_RECIPIENTS, contacts.getNumbers());
         intent.putExtra(SelectRecipientsList.MODE, mode);
         startActivityForResult(intent, requestCode);
     }
@@ -2023,6 +2032,8 @@ public class ComposeMessageActivity extends Activity
         updateAccentColorFromTheme(true);
         initialize(savedInstanceState, 0);
 
+        mPickupDetector = new PickupGestureDetector(ComposeMessageActivity.this, this);
+
         if (TRACE) {
             android.os.Debug.startMethodTracing("compose");
         }
@@ -2063,8 +2074,8 @@ public class ComposeMessageActivity extends Activity
             mSubjectRemoveButton.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
-                    mWorkingMessage.setSubject(null, true);
                     showSubjectEditor(false);
+                    mWorkingMessage.setSubject(null, true);
                     updateSendButtonState();
                 }
             });
@@ -2495,6 +2506,12 @@ public class ComposeMessageActivity extends Activity
             }
         }, 100);
 
+        TelephonyManager tm = (TelephonyManager) getSystemService(Service.TELEPHONY_SERVICE);
+        if (MessagingPreferenceActivity.isSmartCallEnabled(ComposeMessageActivity.this)
+              && tm.getCallState() == TelephonyManager.CALL_STATE_IDLE) {
+            mPickupDetector.enable();
+        }
+
         mIsRunning = true;
         updateThreadIdIfRunning();
         mConversation.markAsRead(true);
@@ -2519,6 +2536,8 @@ public class ComposeMessageActivity extends Activity
         if (isRecipientsEditorVisible()) {
             mRecipientsEditor.removeTextChangedListener(mRecipientsWatcher);
         }
+
+        mPickupDetector.disable();
 
         // remove any callback to display a progress spinner
         if (mAsyncDialog != null) {
@@ -4724,6 +4743,20 @@ public class ComposeMessageActivity extends Activity
         return text;
     }
 
+    @Override
+    public void onPickup() {
+        if (!getRecipients().isEmpty()) {
+            mPickupDetector.disable();
+
+            // call the first recipient
+            String number = getRecipients().get(0).getNumber();
+            Intent dialIntent = new Intent(Intent.ACTION_CALL);
+            dialIntent.setData(Uri.fromParts("tel", number, null));
+            dialIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(dialIntent);
+        }
+    }
+
     private void resetMessage() {
         if (Log.isLoggable(LogTag.APP, Log.VERBOSE)) {
             log("resetMessage");
@@ -5128,6 +5161,7 @@ public class ComposeMessageActivity extends Activity
                         }
                     }
 
+                    final int preCursorChangeCount = mMsgListAdapter.getCount();
                     mMsgListAdapter.changeCursor(cursor);
 
                     if (newSelectionPos != -1) {
@@ -5161,8 +5195,18 @@ public class ComposeMessageActivity extends Activity
                     // more people before the conversation begins.
                     if (cursor != null && cursor.getCount() == 0
                             && !isRecipientsEditorVisible() && !mSentMessage) {
-                        initRecipientsEditor();
-                        mRecipientsEditor.addTextChangedListener(mRecipientsWatcher);
+                        if (preCursorChangeCount >= 1 && TextUtils.isEmpty(mTextEditor.getText())) {
+                            // No message was entered, dismiss
+                            exitComposeMessageActivity(new Runnable() {
+                                @Override
+                                public void run() {
+                                    goToConversationList();
+                                }
+                            });
+                        } else {
+                            initRecipientsEditor();
+                            mRecipientsEditor.addTextChangedListener(mRecipientsWatcher);
+                        }
                     }
 
                     // FIXME: freshing layout changes the focused view to an unexpected

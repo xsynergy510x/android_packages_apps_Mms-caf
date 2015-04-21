@@ -173,6 +173,10 @@
                       android:key="pref_key_mms_read_reports"
                       android:summary="@string/pref_summary_mms_read_reports"
                       android:title="@string/pref_title_mms_read_reports" />
+    <SwitchPreference android:defaultValue="@bool/enable_data_for_mms"
+                      android:key="pref_key_mms_auto_enable_data"
+                      android:title="@string/pref_title_mms_auto_enable_data"
+                      android:summary="@string/pref_summary_mms_auto_enable_data" />
     <SwitchPreference android:defaultValue="@bool/def_sms_auto_retrieval"
                       android:key="pref_key_mms_auto_retrieval"
                       android:title="@string/pref_title_mms_auto_retrieval"
@@ -278,6 +282,12 @@
 
     <!-- Extra Settings -->
     <PreferenceCategory android:title="@string/pref_extra_settings">
+
+        <SwitchPreference
+            android:key="pref_key_mms_smart_dialer"
+            android:title="@string/pref_title_mms_smart_dialer"
+            android:summary="@string/pref_summary_mms_smart_dialer"
+            android:defaultValue="false" />
 
         <PreferenceScreen
                 android:key="pref_blacklist"
