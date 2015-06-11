@@ -5432,7 +5432,8 @@ public class ComposeMessageActivity extends Activity
                 ComposeMessageActivity.this.mMsgListAdapter.notifyDataSetChanged();
 
                 if (mRecipientsEditor != null && (mAddNumbersTask == null ||
-                        mAddNumbersTask.getStatus() != AsyncTask.Status.RUNNING)) {
+                        mAddNumbersTask.getStatus() != AsyncTask.Status.RUNNING) && updated
+                        .getPersonId() != 0) {
                     mRecipientsEditor.populate(recipients);
                 }
             }
@@ -5794,10 +5795,8 @@ public class ComposeMessageActivity extends Activity
             String body = c.getString(COLUMN_SMS_BODY);
             Intent shareIntent = getShareMessageIntent(body);
             Context ctx = getContext();
-            Intent chooserIntent =
-                    IntentUtils.createFilteredChooser(
-                            ctx, ctx.getString(R.string.message_share_intent_title),
-                            shareIntent, ctx.getPackageName());
+            Intent chooserIntent = Intent.createChooser(shareIntent,
+                    ctx.getString(R.string.message_share_intent_title));
             try {
                 startActivity(chooserIntent);
             } catch (ActivityNotFoundException e) {
