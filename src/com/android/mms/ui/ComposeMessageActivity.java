@@ -122,13 +122,17 @@ import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnCreateContextMenuListener;
 import android.view.View.OnKeyListener;
+import android.view.View.OnTouchListener;
+import android.view.ViewConfiguration;
 import android.view.ViewStub;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.MimeTypeMap;
+import android.widget.AbsListView;
 import android.widget.AdapterView;
 import android.widget.EditText;
 import android.widget.ImageButton;
@@ -2096,16 +2100,21 @@ public class ComposeMessageActivity extends Activity
             });
         }
 
+        TextView toLabel = (TextView) findViewById(R.id.to_label);
         if (show) {
             mSubjectTextEditor.addTextChangedListener(mSubjectEditorWatcher);
 
             // Ensure the "to" label is hidden when Subject editor shows
-            TextView toLabel = (TextView) findViewById(R.id.to_label);
             if (toLabel != null) {
                 toLabel.setVisibility(View.GONE);
             }
         } else {
             mSubjectTextEditor.removeTextChangedListener(mSubjectEditorWatcher);
+
+            // Ensure the "to" label is visible when Subject editor is hidden
+            if (toLabel != null) {
+                toLabel.setVisibility(View.VISIBLE);
+            }
         }
 
         mSubjectTextEditor.setOnKeyListener(show ? mSubjectKeyListener : null);
@@ -4456,6 +4465,32 @@ public class ComposeMessageActivity extends Activity
                 }
             }
         });
+
+        mMsgListView.setOnTouchListener(new OnTouchListener() {
+            private final float mThreshold = ViewConfiguration.get(ComposeMessageActivity.this)
+                    .getScaledTouchSlop();
+            float mDownY = 0.0f;
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        mDownY = event.getY();
+                        break;
+                    case MotionEvent.ACTION_MOVE:
+                    case MotionEvent.ACTION_UP:
+                        float moveY = event.getY();
+                        float diff = Math.abs(moveY - mDownY);
+                        if (diff >= mThreshold) {
+                            if (mIsKeyboardOpen) {
+                                hideKeyboard();
+                            }
+                        }
+                        break;
+                }
+                return false;
+            }
+        });
+
         mMsgListView.setMultiChoiceModeListener(new ModeCallback());
         mMsgListView.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE_MODAL);
     }
